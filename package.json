@@ -1,6 +1,6 @@
 {
   "name": "@artale/pi-gate",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Conditional execution gates for Pi. Hold, approve, or block tool calls based on rules. Safety layer for dangerous operations.",
   "keywords": ["pi-package"],
   "license": "MIT",

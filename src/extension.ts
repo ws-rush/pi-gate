@@ -1,11 +1,14 @@
 /**
- * pi-gate — Conditional execution gates for Pi
- * Block or warn on dangerous tool calls. Configurable rules.
+ * pi-gate v1.1 — Project-level execution gates for Pi
  *
- * /gate list — show active rules
- * /gate add <pattern> <action> — add rule (warn|block)
- * /gate rm <id> — remove rule
- * /gate log — recent gate events
+ * User-defined rules, not security policy (that's pi-sentinel).
+ * Learns from past mistakes to auto-suggest rules.
+ *
+ * /gate list                — show active rules
+ * /gate add <pattern> <act> — add rule (warn|block)
+ * /gate rm <id>             — remove rule
+ * /gate log                 — recent gate events
+ * /gate learn               — suggest rules from recent errors
  */
 import type { ExtensionAPI } from '@anthropic-ai/claude-code'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
@@ -85,14 +88,50 @@ function formatLog(): string {
   return `## Gate Log\n\n${rows.join('\n')}`
 }
 
+const errorHistory: { tool: string; input: string; error: string; ts: number }[] = []
+
+function suggestRules(): string {
+  if (errorHistory.length === 0) return 'No errors recorded. Use the session and come back.'
+  // Find repeated patterns
+  const patterns = new Map<string, number>()
+  for (const err of errorHistory) {
+    const key = `${err.tool}:${err.input.slice(0, 40)}`
+    patterns.set(key, (patterns.get(key) || 0) + 1)
+  }
+  const suggestions = Array.from(patterns.entries())
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+
+  if (suggestions.length === 0) return 'No repeated error patterns found yet.'
+  const lines = ['## Suggested rules (from errors)', '']
+  for (const [pattern, count] of suggestions) {
+    const [tool, input] = pattern.split(':')
+    lines.push(`- **${count}x** \`${tool}\` with \`${input}\` → \`/gate add "${input}" warn\``)
+  }
+  return lines.join('\n')
+}
+
 export default function init(pi: ExtensionAPI) {
-  pi.on('pre_tool', (event: any) => {
-    const result = checkGates(event.name || '', event.input || event.params || '')
+  pi.on('tool_call', (event: any) => {
+    const inputStr = typeof event.input === 'string' ? event.input : JSON.stringify(event.input || '')
+    const result = checkGates(event.toolName || '', inputStr)
     if (result.action === 'block') {
-      event.blocked = true
-      event.blockReason = `Gate blocked: pattern "${result.rule!.pattern}" matched`
+      return { block: true, reason: `Gate blocked: pattern "${result.rule!.pattern}" matched` }
     }
-    return event
+    if (result.action === 'warn') {
+      pi.sendMessage({ content: `⚠️ Gate warning: \`${result.rule!.pattern}\` matched in \`${event.toolName}\``, display: true }, { triggerTurn: false })
+    }
+  })
+
+  // Learn from errors
+  pi.on('tool_execution_end', (event: any) => {
+    if (event.isError) {
+      const input = JSON.stringify(event.args || '').slice(0, 100)
+      const error = typeof event.result === 'string' ? event.result.slice(0, 100) : ''
+      errorHistory.push({ tool: event.toolName, input, error, ts: Date.now() })
+      if (errorHistory.length > 100) errorHistory.shift()
+    }
   })
 
   pi.addCommand({ name: 'gate', description: 'Manage execution gates',
@@ -113,7 +152,10 @@ export default function init(pi: ExtensionAPI) {
         rules.splice(idx, 1); saveRules(rules)
         pi.sendMessage({ content: `Removed gate #${id}.`, display: true }, { triggerTurn: false }); return
       }
-      pi.sendMessage({ content: '/gate list|add|rm|log', display: true }, { triggerTurn: false })
+      if (sub === 'learn') {
+        pi.sendMessage({ content: suggestRules(), display: true }, { triggerTurn: false }); return
+      }
+      pi.sendMessage({ content: '/gate list|add|rm|log|learn', display: true }, { triggerTurn: false })
     }
   })
 
