@@ -1,0 +1,12 @@
+{
+  "name": "@artale/pi-gate",
+  "version": "1.0.0",
+  "description": "Conditional execution gates for Pi. Hold, approve, or block tool calls based on rules. Safety layer for dangerous operations.",
+  "keywords": ["pi-package"],
+  "license": "MIT",
+  "author": "artale",
+  "repository": { "type": "git", "url": "https://github.com/arosstale/pi-gate.git" },
+  "files": ["src/extension.ts"],
+  "pi": { "extensions": ["src/extension.ts"] },
+  "peerDependencies": { "@mariozechner/pi-coding-agent": "*" }
+}
