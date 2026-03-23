@@ -134,9 +134,9 @@ export default function init(pi: ExtensionAPI) {
     }
   })
 
-  pi.addCommand({ name: 'gate', description: 'Manage execution gates',
-    handler: async (args) => {
-      const parts = args.trim().split(/\s+/)
+  pi.registerCommand('gate', { description: 'Manage execution gates',
+    handler: async (args: string) => {
+      const parts = args.trim().match(/[^\s"]+|"([^"]*)"/g)?.map(t => t.replace(/^"(.*)"$/, '$1')) || []
       const sub = parts[0]?.toLowerCase()
       if (!sub || sub === 'list') { pi.sendMessage({ content: formatRules(), display: true }, { triggerTurn: false }); return }
       if (sub === 'log') { pi.sendMessage({ content: formatLog(), display: true }, { triggerTurn: false }); return }
@@ -159,7 +159,16 @@ export default function init(pi: ExtensionAPI) {
     }
   })
 
-  pi.addTool({ name: 'gate_list', description: 'List active execution gate rules.',
-    parameters: { type: 'object', properties: {} }, handler: async () => formatRules()
+  pi.registerTool({
+    name: 'gate_list',
+    label: 'List Gate Rules',
+    description: 'List active execution gate rules.',
+    parameters: { type: 'object', properties: {} },
+    execute: async (toolCallId: string, params: any) => {
+      return {
+        content: [{ type: 'text', text: formatRules() }],
+        details: {}
+      }
+    }
   })
 }
